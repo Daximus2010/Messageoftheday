@@ -1,0 +1,109 @@
+using UnityEngine;
+
+public class CubePlacer : MonoBehaviour
+{
+    public GameObject gridPlacer;
+    public OculusInput oculusInput;
+    public GridSystem gridSystem;
+    public GameObject cubePrefab;
+    public Material highlightMaterial;
+    public int numBlocksToSelect = 3;
+
+    private GameObject ghostBlock;
+    private GameObject[] highlightedBlocks = new GameObject[numBlocksToSelect];
+    private Vector3[] intersectedBlockPositions = new Vector3[numBlocksToSelect];
+    private LineRenderer lineRenderer;
+
+    private void Start()
+    {
+        lineRenderer = gameObject.AddComponent<LineRenderer>();
+        lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        lineRenderer.startWidth = 0.05f;
+        lineRenderer.endWidth = 0.05f;
+
+        // Disable the script if the grid placer or Oculus controller is disabled
+        if (!gridPlacer.activeInHierarchy || !oculusInput.gameObject.activeInHierarchy)
+        {
+            enabled = false;
+        }
+    }
+
+    private void Update()
+    {
+        // Check if the grid placer or Oculus controller is disabled
+        if (!gridPlacer.activeInHierarchy || !oculusInput.gameObject.activeInHierarchy)
+        {
+            enabled = false;
+            return;
+        }
+
+        // Get the position and direction of the Oculus controller
+        Vector3 controllerPosition = oculusInput.GetPosition();
+        Vector3 controllerDirection = oculusInput.GetDirection();
+
+        // Calculate the position of the ghost block based on where the Oculus is pointing
+        Vector3 ghostBlockPosition = gridSystem.GetBlockAt(controllerPosition + controllerDirection);
+        if (ghostBlock == null)
+        {
+            ghostBlock = Instantiate(cubePrefab, ghostBlockPosition, Quaternion.identity);
+            ghostBlock.GetComponent<Renderer>().material.color = Color.gray;
+        }
+        else
+        {
+            ghostBlock.transform.position = ghostBlockPosition;
+        }
+
+        // Calculate the line from the Oculus controller to the ghost block
+        Vector3[] linePositions = { controllerPosition, ghostBlockPosition };
+        lineRenderer.positionCount = 2;
+        lineRenderer.SetPositions(linePositions);
+
+        // Check for right trigger press to select 3 blocks for placement
+        if (oculusInput.GetRightTrigger())
+        {
+            // Get the positions of the 3 blocks the line intersects with
+            int numIntersectedBlocks = gridSystem.GetIntersectedBlocks(linePositions, intersectedBlockPositions, numBlocksToSelect);
+
+            // Highlight the intersected blocks to indicate they have been selected
+            for (int i = 0; i < numIntersectedBlocks; i++)
+            {
+                GameObject block = gridSystem.GetBlockAt(intersectedBlockPositions[i]);
+                if (block != null && highlightedBlocks[i] == null)
+                {
+                    highlightedBlocks[i] = block;
+                    block.GetComponent<Renderer>().material = highlightMaterial;
+                }
+            }
+        }
+
+        // Check for left trigger press to place the cubes
+        if (oculusInput.GetLeftTrigger())
+        {
+          // Place the cubes at the positions of the selected blocks
+          for (int i = 0; i < numBlocksToSelect; i++)
+          {
+            if (highlightedBlocks[i] != null)
+            {
+              Instantiate(cubePrefab, highlightedBlocks[i].transform.position, Quaternion.identity);
+              Destroy(highlightedBlocks[i]);
+            }
+        }
+    }
+
+    // Clear the highlighted blocks and reset the intersected blocks list
+    for (int i = 0; i < numBlocksToSelect; i++)
+    {
+        if (highlightedBlocks[i] != null)
+        {
+            highlightedBlocks[i].GetComponent<Renderer>().material = gridSystem.GetDefaultMaterial();
+            highlightedBlocks[i] = null;
+        }
+
+        intersectedBlockPositions[i] = Vector3.zero;
+    }
+
+    // Destroy the ghost block
+    Destroy(ghostBlock);
+}
+
+}
